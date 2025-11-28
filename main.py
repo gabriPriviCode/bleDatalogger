@@ -30,6 +30,7 @@ class BLE_DEVICE():
         self.last_data = {}
         self.last_message_time = time.time()
         self.delta_time_notification = 0
+        self.pause_acquisition = False
 
 device = BLE_DEVICE(DEVICE_ADDRESS, DEVICE_NAME, DATA_CHARACTERISTIC_UUID, LISTENING_DURATION)
 
@@ -99,12 +100,18 @@ def write_to_csv(data_row: dict):
         writer = csv.DictWriter(file, fieldnames=CSV_HEADERS)
         writer.writerow(data_row)
         
+def display_acquisition_status():
+    global device
+    status = "Paused" if device.pause_acquisition else "Running"
+    return html.P(f"Data Acquisition status: {status}")
 
 app = Dash(__name__)
 app.layout = html.Div([
     html.H1("BLE Temperature Monitor"),
     dcc.Interval(id='interval', n_intervals=0),
     html.P(id="last-message", children=f"Last Message: {device.last_message}"),
+    html.Button("Pause/Resume Acquisition", id="toggle-acquisition", n_clicks=0),
+    html.P(id="data-acquisition-status", children=f"Data Acquisition status: Running"),
 ])
 
 @app.callback(
@@ -113,6 +120,19 @@ app.layout = html.Div([
 )
 def update_last_message(n):
     return f"Last Message: {device.last_message}"
+
+@app.callback(
+    Output("data-acquisition-status", "children"),
+    Input("toggle-acquisition", "n_clicks")
+)
+def toggle_acquisition_status(n_clicks):
+    global device
+    if n_clicks % 2 == 1:
+        device.pause_acquisition = True
+        return f"Data Acquisition status: Paused"
+    else:
+        device.pause_acquisition = False
+        return f"Data Acquisition status: Running"
 
 
 async def scan_and_connect(device: BLE_DEVICE):
@@ -185,19 +205,20 @@ async def acquire_data(client: BleakClient, device: BLE_DEVICE):
 
 def notification_handler(sender: int, data: bytearray):
     global device
-    try:
-        decoded_string = data.decode('utf-8').strip()
-        print(f"[{sender}] Data Decoded (UTF-8): {decoded_string}")
-        parsed_row = parse_and_prepare_row(decoded_string)
-        device.last_data = parsed_row 
-        device.last_message = decoded_string 
-        device.delta_time_notification = time.time() - device.last_message_time
-        device.last_message_time = time.time()
-        write_to_csv(parsed_row)
-    except UnicodeDecodeError:
-        print(f"[{sender}] Raw data (HEX): {data.hex()}")
-    except Exception as e:
-        print(f"[{sender}] Error: {e}")
+    if not device.pause_acquisition:
+        try:
+            decoded_string = data.decode('utf-8').strip()
+            print(f"[{sender}] Data Decoded (UTF-8): {decoded_string}")
+            parsed_row = parse_and_prepare_row(decoded_string)
+            device.last_data = parsed_row 
+            device.last_message = decoded_string 
+            device.delta_time_notification = time.time() - device.last_message_time
+            device.last_message_time = time.time()
+            write_to_csv(parsed_row)
+        except UnicodeDecodeError:
+            print(f"[{sender}] Raw data (HEX): {data.hex()}")
+        except Exception as e:
+            print(f"[{sender}] Error: {e}")
 
 
 def get_data_async():
