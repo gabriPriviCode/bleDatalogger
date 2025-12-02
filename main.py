@@ -30,7 +30,7 @@ class BLE_DEVICE():
         self.last_data = {}
         self.last_message_time = time.time()
         self.delta_time_notification = 0
-        self.pause_acquisition = False
+        self.pause_acquisition = True
 
 device = BLE_DEVICE(DEVICE_ADDRESS, DEVICE_NAME, DATA_CHARACTERISTIC_UUID, LISTENING_DURATION)
 
@@ -110,7 +110,7 @@ app.layout = html.Div([
     html.H1("BLE Temperature Monitor"),
     dcc.Interval(id='interval', n_intervals=0),
     html.P(id="last-message", children=f"Last Message: {device.last_message}"),
-    html.Button("Pause/Resume Acquisition", id="toggle-acquisition", n_clicks=0),
+    html.Button("Pause / Resume Acquisition", id="toggle-acquisition", n_clicks=0),
     html.P(id="data-acquisition-status", children=f"Data Acquisition status: Running"),
 ])
 
@@ -128,12 +128,10 @@ def update_last_message(n):
 def toggle_acquisition_status(n_clicks):
     global device
     if n_clicks % 2 == 1:
-        device.pause_acquisition = True
-        return f"Data Acquisition status: Paused"
-    else:
         device.pause_acquisition = False
-        return f"Data Acquisition status: Running"
-
+    else:
+        device.pause_acquisition = True
+    return f"Data acquisition status: {'Paused' if device.pause_acquisition else 'Running'}"
 
 async def scan_and_connect(device: BLE_DEVICE):
     print("Scanning...")
