@@ -30,7 +30,6 @@ errorbar(B_intervals, magY_means, magY_incA, '-o');
 hold on;
 plot(B_intervals, B_intervals, '--');
 hold on;
-max_std = max(magY_std);
 upper_line = B_intervals + 3 * max_std;
 lower_line = B_intervals - 3 * max_std;
 plot(B_intervals, upper_line);
@@ -38,7 +37,7 @@ hold on;
 plot(B_intervals, lower_line);
 xlabel('Magnetic field (µT)');
 ylabel('Magnetic field (µT)');
-legend('Sensor MagY', 'Reference MagY', 'Reference MagY+ 3 * STD', 'Reference Magy - 3 * STD')
+legend('Sensor MagY', 'Reference MagY', 'Chamber temperature + 3 * STD', 'Chamber temperature - 3 * STD')
 grid on
 
 
