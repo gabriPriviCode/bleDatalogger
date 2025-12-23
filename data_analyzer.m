@@ -5,6 +5,8 @@ clc
 filename_temp = 'Temp.csv';
 filename_rh = 'RH.csv';
 filename_magY = 'MagY.csv';
+filename_magX = 'MagX.csv';
+filename_magZ = 'MagZ.csv';
 mu0 = 4 * pi * 1e-7;
 L = 0.43;
 N = 765;
@@ -15,33 +17,40 @@ time_data = table_1{:, "Time"};
 temperature_data = table_1{:, "TempC"};
 temperature_reference = table_1{:, "TempRef"};
 
+%% Mag Y%%
 table_magY = readtable(filename_magY);
 magY_data = table_magY{:, 'Magnetic_Y'};
-I_ref = table_magY{:, 'I_ref'};
+I_ref_y = table_magY{:, 'I_ref'};
+
+B_ref = mu0 * N / L * I_ref_y * 1e6;
+B_steps_y = [1; find(abs(diff(I_ref_y)) > 0); length(I_ref_y)];
+[B_intervals_y, magY_means, magY_std, magY_incA] = getStats(B_steps_y, magY_data, B_ref);
+
+plotCalibration(B_intervals_y, magY_means, magY_incA, 'Reference Magnetic Field Y (µT)', 'Sensor Magnetic Field Y (µT)');
+
+%% MAG X %%
+table_magX = readtable(filename_magX);
+magX_data = table_magX{:, 'Magnetic_X'};
+I_ref = table_magX{:, 'I_ref'};
 
 B_ref = mu0 * N / L * I_ref * 1e6;
-B_steps = [1; find(abs(diff(I_ref)) > 0); length(I_ref)];
-[B_intervals, magY_means, magY_std, magY_incA] = getStats(B_steps, magY_data, B_ref);
+B_steps_x = [1; find(abs(diff(I_ref)) > 0); length(I_ref)];
+[B_intervals_x, magX_means, magX_std, magX_incA] = getStats(B_steps_x, magX_data, B_ref);
 
+plotCalibration(B_intervals_x, magX_means, magX_incA, 'Reference Magnetic Field X (µT)', 'Sensor Magnetic Field X (µT)');
 
-figure()
-title('Magnetic Field Y');
-errorbar(B_intervals, magY_means, magY_incA, '-o');
-hold on;
-plot(B_intervals, B_intervals, '--');
-hold on;
-max_std = max(magY_std);
-upper_line = B_intervals + 3 * max_std;
-lower_line = B_intervals - 3 * max_std;
-plot(B_intervals, upper_line);
-hold on;
-plot(B_intervals, lower_line);
-xlabel('Magnetic field (µT)');
-ylabel('Magnetic field (µT)');
-legend('Sensor MagY', 'Reference MagY', 'Reference MagY+ 3 * STD', 'Reference Magy - 3 * STD')
-grid on
+%% MAG Z %%
+table_magZ = readtable(filename_magZ);
+magZ_data = table_magZ{:, 'Magnetic_Z'};
+I_ref = table_magZ{:, 'I_ref'};
 
+B_ref = mu0 * N / L * I_ref * 1e6;
+B_steps_z = [1; find(abs(diff(I_ref)) > 0); length(I_ref)];
+[B_intervals_z, magZ_means, magZ_std, magZ_incA] = getStats(B_steps_z, magZ_data, B_ref);
 
+plotCalibration(B_intervals_z, magZ_means, magZ_incA, 'Reference Magnetic Field Z (µT)', 'Sensor Magnetic Field Z (µT)');
+
+%% Temperature %%
 time = zeros(length(time_data));
 for i = 1 : length(time)
     time(i) = 10 * i;
@@ -51,6 +60,17 @@ ref_temp_values = temperature_reference;
 temp_steps = [1; find(abs(diff(ref_temp_values)) > 0); length(ref_temp_values)];
 [temp_intervals, temp_means, temp_std, temp_incA] = getStats(temp_steps, temperature_data, temperature_reference);
 
+step_time = zeros(length(temp_steps)-1,1);
+step_temp = zeros(length(temp_steps)-1,1);
+
+for k = 1:length(temp_steps)-1
+    idx = temp_steps(k):temp_steps(k+1);
+    step_time(k) = mean(time(idx));
+    step_temp(k) = temperature_reference(round(mean(idx)));
+end
+
+reference_fluctuation = 0.3;
+ub_climate_chamber = ones(length(step_time),1) * reference_fluctuation / sqrt(3);
 
 figure()
 title('Temperature plot');
@@ -62,23 +82,21 @@ ylabel('Temperature (°C)');
 legend("Measured temperature", "Temperature Reference");
 grid on
 
+plotCalibration(temp_intervals(2:8), temp_means(1:7), temp_incA(1:7), 'Reference Temperature (°C)', 'Sensor Temperature (°C)');
+
 figure()
-error = temperature_reference - temperature_data;
-max_std = max(temp_std);
-errorbar(temp_intervals(2:8), temp_means(1:7), temp_incA(1:7), '-o');
+title('Temperature plot');
+errorbar(step_time, temp_means, temp_incA, 'o');
 hold on;
-upper_line = temp_intervals(2:8) + 3 * max_std;
-lower_line = temp_intervals(2:8) - 3* max_std;
-plot(temp_intervals(2:8), temp_intervals(2:8), '--');
+plot(time, temperature_reference);
 hold on;
-plot(temp_intervals(2:8), upper_line);
-hold on;
-plot(temp_intervals(2:8), lower_line);
-xlabel('Temperature (°C)');
+errorbar(step_time, step_temp, ub_climate_chamber, 'o', 'LineStyle', 'none');
+xlabel('Time (s)');
 ylabel('Temperature (°C)');
-legend('Sensor temperature', 'Chamber temperature', 'Chamber temperature + 3 * STD', 'Chamber temperature - 3 * STD')
+legend("Measured temperature", "Temperature Reference");
 grid on
 
+%% RH %%
 table_2 = readtable(filename_rh);
 time_data = table_2{:, "Time"};
 rh_data = table_2{:, "HumRH"};
@@ -93,6 +111,17 @@ ref_rh_values = rh_reference;
 rh_steps = [1; find(abs(diff(ref_rh_values)) > 0); length(ref_rh_values)];
 [rh_intervals, rh_means, rh_std, rh_incA] = getStats(rh_steps, rh_data, rh_reference);
 
+
+step_time = zeros(length(rh_steps)-1,1);
+step_temp = zeros(length(rh_steps)-1,1);
+
+for k = 1:length(rh_steps)-1
+    idx = rh_steps(k):rh_steps(k+1);
+    step_time(k) = mean(time(idx));
+    step_temp(k) = rh_reference(round(mean(idx)));
+end
+
+
 figure()
 title('Relative Humidity plot');
 plot(time, rh_data);
@@ -103,22 +132,21 @@ ylabel('Relative Humidity (%)');
 legend("Measured humidity", "Humidity Reference");
 grid on
 
+plotCalibration(rh_intervals(2:11), rh_means(1:10), rh_incA(1:10), 'Reference Humidity (%)', 'Sensor Humidity (%)');
+
+reference_fluctuation = 3.0;
+ub_climate_chamber = ones(length(step_time),1) * reference_fluctuation / sqrt(3);
 
 figure()
-error = rh_reference - rh_data;
-max_std = max(rh_std);
-errorbar(rh_intervals(2:11), rh_means(1:10), rh_incA(1:10), '-o');
+title('RH plot');
+errorbar(step_time, rh_means, rh_incA, 'o');
 hold on;
-upper_line = rh_intervals(2:11) + 3 * max_std;
-lower_line = rh_intervals(2:11) - 3 * max_std;
-plot(rh_intervals(2:11), rh_intervals(2:11), '--');
+plot(time, rh_reference);
 hold on;
-plot(rh_intervals(2:11), upper_line);
-hold on;
-plot(rh_intervals(2:11), lower_line);
-xlabel('Relative Humidity (%)');
+errorbar(step_time, step_temp, ub_climate_chamber, 'o', 'LineStyle', 'none');
+xlabel('Time (s)');
 ylabel('Relative Humidity (%)');
-legend('Sensor humidity', 'Chamber humidity', 'Chamber humidity + 3 * STD', 'Chamber humidity - 3 * STD');
+legend("Measured Humidity", "Humidity Reference");
 grid on
 
 temp_results = table(temp_intervals, temp_means, temp_std, ...
@@ -129,7 +157,7 @@ rh_results = table(rh_intervals, rh_means, rh_std, ...
 
 
 
-
+%% HELPERS
 function [intervals, means, std_vals, incA] = getStats(steps, raw_data, reference)
     intervals = [];
     means = [];
@@ -151,4 +179,28 @@ function [intervals, means, std_vals, incA] = getStats(steps, raw_data, referenc
         std_vals = [std_vals; interval_std];
         incA = [incA; interval_incA];
     end
+end
+
+
+
+function plotCalibration(reference_vals, meas_means, incA, x_label, y_label)
+    p = polyfit(reference_vals, meas_means, 1);
+    x_fit = linspace(min(reference_vals), max(reference_vals), 100);
+    y_fit = polyval(p, x_fit);
+    
+    u_max = max(incA);
+    upper_band = y_fit + u_max;
+    lower_band = y_fit - u_max;
+    
+    figure()
+    errorbar(reference_vals, meas_means, incA, 'o', 'LineStyle', 'none')
+    hold on
+    plot(x_fit, y_fit, 'LineWidth', 1.2)
+    plot(x_fit, upper_band)
+    plot(x_fit, lower_band)
+    xlabel(x_label)
+    ylabel(y_label)
+    legend('Measured mean ± u_A', 'Calibration line', ...
+           '+ u_A', '- u_A')
+    grid on
 end
